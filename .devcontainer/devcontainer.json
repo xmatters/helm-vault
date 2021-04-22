@@ -1,0 +1,48 @@
+// For format details, see https://aka.ms/vscode-remote/devcontainer.json or this file's README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.134.0/containers/python-3
+{
+	"name": "Python 3",
+	"dockerComposeFile": "../docker-compose.yml",
+	"service": "helm-vault",
+	"workspaceFolder": "/workspace/",
+	"shutdownAction": "stopCompose",
+	// Add the IDs of extensions you want installed when the container is created.
+	"extensions": [
+		"ms-python.python",
+		"ms-azuretools.vscode-docker"
+	],
+	
+	// this runs before the container is built, things like fetching secrets from vault would go here
+	// "initializeCommand": ""
+
+	// these run while the container is built but are things you don't want in your released container/Dockerfile
+	// "postCreateCommand": "apt-get update && apt-get install -y git",
+
+	// dev can be root, so why not
+	"remoteUser": "root",
+
+	// Set *default* container specific settings.json values on container create.
+	"settings": { 
+		"terminal.integrated.shell.linux": "/bin/bash",
+		"python.pythonPath": "/usr/local/bin/python",
+		"python.formatting.autopep8Enabled": true,
+		"python.formatting.autopep8Path": "/usr/local/bin/autopep8",
+		"python.formatting.blackEnabled": true,
+		"python.formatting.blackPath": "/usr/local/bin/black",
+		"python.linting.enabled": true,
+		"python.linting.pylintEnabled": true,
+		"python.linting.pylintPath": "/usr/local/bin/pylint",
+		"python.linting.pydocstyleEnabled": true,
+		"python.linting.pydocstylePath": "/usr/local/bin/pydocstyle",
+		"python.linting.flake8Enabled": true,
+		"python.linting.flake8Path": "/usr/local/bin/autopep8",
+		"python.linting.pycodestyleEnabled": true,
+		"python.linting.pycodestylePath": "/usr/local/bin/flake8",
+		"python.linting.pycodestyleArgs": ["--ignore=E501,W503"], // E501 is line to long | W503/W504 contradict but W504 is now best practice (the boolean operator at begining of a line continuation)
+		"[python]": {
+			"editor.codeActionsOnSave": {
+				"source.organizeImports": true
+			}
+		}
+	}
+}

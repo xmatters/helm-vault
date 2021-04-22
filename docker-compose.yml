@@ -1,0 +1,30 @@
+version: '3'
+
+services:
+  helm-vault:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      VAULT_ADDR: http://local-vault:8200
+      VAULT_PATH: secrets
+      VAULT_TOKEN: myroot
+      KVVERSION: v2
+    volumes:
+      - .:/workspace:cached
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command: /bin/sh -c "while sleep 1000; do :; done"
+  local-vault:
+    image: vault:latest
+    ports:
+      - 8200:8200
+    cap_add:
+    - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: myroot
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    deploy:
+      restart_policy:
+        condition: on-failure

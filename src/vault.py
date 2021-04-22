@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 
-import re
-import ruamel.yaml
-import hvac
-import os
 import argparse
+import os
+import re
+
+import hvac
+import ruamel.yaml
+
 RawTextHelpFormatter = argparse.RawTextHelpFormatter
 import glob
-import sys
-import git
 import platform
 import subprocess
+import sys
+
+import git
+
 check_call = subprocess.check_call
 
 
@@ -169,8 +173,8 @@ class Envs:
         value = None
 
         if environment_var_name in os.environ:
-            value=os.environ[environment_var_name]
-            source="ENVIRONMENT"
+            value = os.environ[environment_var_name]
+            source = "ENVIRONMENT"
 
         if hasattr(self.args, arg_name):
             v = getattr(self.args, arg_name)
@@ -226,15 +230,15 @@ class Vault:
         try:
             if self.args.verbose is True:
                 print(f"Using KV Version: {self.kvversion}")
-                print(f"Attempting to write to url: {self.envs.vault_addr}/v1/{mount_point}/data{_path}")
+                print(f"Attempting to write to url: {self.envs.vault_addr}/v1/{mount_point}/data/{_path}")
 
             if self.kvversion == "v1":
-                self.client.write(_path, value=value, mount_point = mount_point)
+                self.client.write(_path, value=value, mount_point=mount_point)
             elif self.kvversion == "v2":
                 self.client.secrets.kv.v2.create_or_update_secret(
                     path=_path,
                     secret=dict(value=value),
-                    mount_point = mount_point,
+                    mount_point=mount_point,
                 )
             else:
                 print("Wrong KV Version specified, either v1 or v2")
@@ -253,13 +257,13 @@ class Vault:
         try:
             if self.args.verbose is True:
                 print(f"Using KV Version: {self.kvversion}")
-                print(f"Attempting to write to url: {self.envs.vault_addr}/v1/{mount_point}/data{_path}")
+                print(f"Attempting to read from url: {self.envs.vault_addr}/v1/{mount_point}/data/{_path}")
 
             if self.kvversion == "v1":
                 value = self.client.read(_path)
                 value = value.get("data", {}).get("value")
             elif self.kvversion == "v2":
-                value = self.client.secrets.kv.v2.read_secret_version(path=_path,mount_point=mount_point)
+                value = self.client.secrets.kv.v2.read_secret_version(path=_path, mount_point=mount_point)
                 value = value.get("data", {}).get("data", {}).get("value")
             else:
                 print("Wrong KV Version specified, either v1 or v2")
