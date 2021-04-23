@@ -10,6 +10,8 @@ services:
       VAULT_PATH: secrets
       VAULT_TOKEN: myroot
       KVVERSION: v2
+    cap_add:
+      - IPC_LOCK
     volumes:
       - .:/workspace:cached
     deploy:
