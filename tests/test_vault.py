@@ -6,17 +6,73 @@ from collections import OrderedDict as ordereddict
 from shutil import copyfile
 
 import pytest
-from datadiff.tools import assert_equal
-
 import src.vault as vault
+from datadiff.tools import assert_equal
 
 
 def test_load_yaml():
 
-    data_test = ordereddict([('image', ordereddict([('repository', 'nextcloud'), ('tag', '15.0.2-apache'), ('pullPolicy', 'IfNotPresent')])), ('nameOverride', ''), ('fullnameOverride', ''), ('replicaCount', 1), ('ingress', ordereddict([('enabled', True), ('annotations', ordereddict())])), ('nextcloud', ordereddict([('host', 'nextcloud.corp.justin-tech.com'), ('username', 'admin'), ('password', 'changeme')])), ('internalDatabase', ordereddict([('enabled', True), ('name', 'nextcloud')])), ('externalDatabase', ordereddict([('enabled', False), ('host', None), ('user', 'VAULT:/secret/testdata/user'), ('password', 'VAULT:/secret/{environment}/testdata/password'), ('database', 'nextcloud')])), ('mariadb', ordereddict([('enabled', True), ('db', ordereddict([('name', 'nextcloud'), ('user', 'nextcloud'), ('password', 'changeme')])), ('persistence', ordereddict([('enabled', True), ('storageClass', 'nfs-client'), ('accessMode', 'ReadWriteOnce'), ('size', '8Gi')]))])), ('service', ordereddict([('type', 'ClusterIP'), ('port', 8080), ('loadBalancerIP', 'nil')])), ('persistence', ordereddict([('enabled', True), ('storageClass', 'nfs-client'), ('accessMode', 'ReadWriteOnce'), ('size', '8Gi')])), ('resources', ordereddict()), ('nodeSelector', ordereddict()), ('tolerations', []), ('affinity', ordereddict())])
+    data_test = ordereddict([
+        ('image', ordereddict([
+            ('repository', 'nextcloud'),
+            ('tag', '15.0.2-apache'),
+            ('pullPolicy', 'IfNotPresent')
+        ])),
+        ('nameOverride', ''),
+        ('fullnameOverride', ''),
+        ('replicaCount', 1),
+        ('ingress', ordereddict([
+            ('enabled', True),
+            ('annotations', ordereddict())
+        ])),
+        ('nextcloud', ordereddict([
+            ('host', 'nextcloud.corp.justin-tech.com'),
+            ('username', 'admin'),
+            ('password', 'changeme')
+        ])),
+        ('internalDatabase', ordereddict([
+            ('enabled', True),
+            ('name', 'nextcloud')
+        ])),
+        ('externalDatabase', ordereddict([
+            ('enabled', False),
+            ('host', None),
+            ('user', 'VAULT:/secret/testdata/user'),
+            ('password', 'VAULT:/secret/{environment}/testdata/password'),
+            ('database', 'nextcloud')
+        ])),
+        ('mariadb', ordereddict([
+            ('enabled', True),
+            ('db', ordereddict([
+                ('name', 'nextcloud'),
+                ('user', 'nextcloud'),
+                ('password', 'changeme')
+            ])),
+            ('persistence', ordereddict([
+                ('enabled', True),
+                ('storageClass', 'nfs-client'),
+                ('accessMode', 'ReadWriteOnce'),
+                ('size', '8Gi')
+            ]))
+        ])),
+        ('service', ordereddict([
+            ('type', 'ClusterIP'),
+            ('port', 8080),
+            ('loadBalancerIP', 'nil')
+        ])),
+        ('persistence', ordereddict([
+            ('enabled', True),
+            ('storageClass', 'nfs-client'),
+            ('accessMode', 'ReadWriteOnce'),
+            ('size', '8Gi')
+        ])),
+        ('resources', ordereddict()),
+        ('nodeSelector', ordereddict()),
+        ('tolerations', []),
+        ('affinity', ordereddict())
+    ])
     yaml_file = "./tests/test.yaml"
     data = vault.load_yaml(yaml_file)
-    print(data)
     assert_equal(data, data_test)
 
 def test_git_path():
@@ -107,9 +163,7 @@ def test_dec():
 
     vault.main(['dec', './tests/test.yaml'])
 
-    assert output == [
-        'Done Decrypting',
-    ]
+    assert 'Done Decrypting' in output
 
 def test_value_from_path():
     data = {
