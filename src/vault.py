@@ -21,18 +21,19 @@ check_call = subprocess.check_call
 if sys.version_info[:2] < (3, 7):
     raise Exception("Python 3.7 or a more recent version is required.")
 
+
 def parse_args(args):
     # Help text
-    parser = argparse.ArgumentParser(description=
-    """Store secrets from Helm in Vault
-    \n
-    Requirements:
-    \n
-    Environment Variables:
-    \n
-    VAULT_ADDR:     (The HTTP address of Vault, for example, http://localhost:8200)
-    VAULT_TOKEN:    (The token used to authenticate with Vault)
-    """, formatter_class=RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description="""Store secrets from Helm in Vault
+        \n
+        Requirements:
+        \n
+        Environment Variables:
+        \n
+        VAULT_ADDR:     (The HTTP address of Vault, for example, http://localhost:8200)
+        VAULT_TOKEN:    (The token used to authenticate with Vault)
+        """, formatter_class=RawTextHelpFormatter)
     subparsers = parser.add_subparsers(dest="action", required=True)
 
     # Encrypt help
@@ -138,6 +139,7 @@ def parse_args(args):
 
     return parser
 
+
 class Git(object):
     def __init__(self, cwd):
         self.cwd = cwd
@@ -150,6 +152,7 @@ class Git(object):
         except Exception as ex:
             print(f"There was an error finding the root git repository, please specify a path within the yaml file. For more information, see Vault Path Templating: https://github.com/Just-Insane/helm-vault#vault-path-templating")
             pass
+
 
 class Envs(object):
     def __init__(self, args):
@@ -190,6 +193,7 @@ class Envs(object):
             print(f"The {source} {arg_name} is: {value}")
 
         return value
+
 
 class Vault(object):
     def __init__(self, args, envs):
@@ -274,6 +278,7 @@ class Vault(object):
 
         return value
 
+
 def load_yaml(yaml_file):
     # Load the YAML file
     yaml = ruamel.yaml.YAML()
@@ -281,6 +286,7 @@ def load_yaml(yaml_file):
     with open(yaml_file) as filepath:
         data = yaml.load(filepath)
         return data
+
 
 def cleanup(args, envs):
     # Cleanup decrypted files
@@ -302,6 +308,7 @@ def cleanup(args, envs):
     else:
         sys.exit()
 
+
 # Get value from a nested hash structure given a path of key names
 # For example:
 # secret_data['mysql']['password'] = "secret"
@@ -316,6 +323,7 @@ def value_from_path(secret_data, path):
         else:
             raise Exception(f"Missing secret value. Key {key} does not exist when retrieving value from path {path}")
     return val
+
 
 def dict_walker(pattern, data, args, envs, secret_data, path=None):
     # Walk through the loaded dicts looking for the values we want
@@ -358,8 +366,8 @@ def load_secret(args):
             raise Exception(f"ERROR: Secret file name must end with \".yaml.dec\". {args.secret_file} was given instead.")
         return load_yaml(args.secret_file)
 
-def main(argv=None):
 
+def main(argv=None):
     # Parse arguments from argparse
     # This is outside of the parse_arg function because of issues returning multiple named values from a function
     parsed = parse_args(argv)
@@ -406,6 +414,7 @@ def main(argv=None):
             print(f"Error: {ex}")
 
         cleanup(args, envs)
+
 
 if __name__ == "__main__":
     try:
