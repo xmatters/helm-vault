@@ -11,7 +11,7 @@ class Vault:
         self.secret_path = "hello"
         self.secret = {
             "value": "testsecret",
-            "custom.key": "testsecret2"
+            "custom.key": "customSecret"
         }
         self.client = hvac.Client(url=os.environ["VAULT_ADDR"], token=os.environ["VAULT_TOKEN"])
 

@@ -138,7 +138,7 @@ def parse_args(args):
 
     return parser
 
-class Git:
+class Git(object):
     def __init__(self, cwd):
         self.cwd = cwd
 
@@ -151,7 +151,7 @@ class Git:
             print(f"There was an error finding the root git repository, please specify a path within the yaml file. For more information, see Vault Path Templating: https://github.com/Just-Insane/helm-vault#vault-path-templating")
             pass
 
-class Envs:
+class Envs(object):
     def __init__(self, args):
         self.args = args
         self.vault_addr = os.environ["VAULT_ADDR"]
@@ -191,7 +191,7 @@ class Envs:
 
         return value
 
-class Vault:
+class Vault(object):
     def __init__(self, args, envs):
         self.args = args
         self.envs = envs
@@ -367,6 +367,7 @@ def main(argv=None):
 
     yaml_file = args.yaml_file
     data = load_yaml(yaml_file)
+
     action = args.action
 
     envs = Envs(args)
