@@ -24,7 +24,7 @@ ingress:
 nextcloud:
   host: nextcloud.corp.justin-tech.com
   username: admin
-  password: nextpass
+  password: changeme
 
 
 internalDatabase:
@@ -42,10 +42,10 @@ externalDatabase:
   host:
 
   ## Database user
-  user: nextcloud
+  user: VAULT:/secret/testdata/user
 
   ## Database password
-  password:
+  password: VAULT:/secret/{environment}/testdata/password
 
   ## Database name
   database: nextcloud
@@ -60,7 +60,7 @@ mariadb:
   db:
     name: nextcloud
     user: nextcloud
-    password: mariapass
+    password: changeme
 
   ## Enable persistence using Persistent Volume Claims
   ## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/

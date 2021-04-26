@@ -1,3 +1,4 @@
 secrets:
   stringData:
     mysecret: VAULT:/secret/hello
+hello: changeme

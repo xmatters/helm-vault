@@ -75,11 +75,13 @@ def test_load_yaml():
     data = vault.load_yaml(yaml_file)
     assert_equal(data, data_test)
 
+
 def test_git_path():
     cwd = os.getcwd()
     git_path = vault.Git(cwd)
     git_path = git_path.get_git_root()
     assert git_path == os.getcwd()
+
 
 def test_parser():
     copyfile("./tests/test.yaml", "./tests/test.yaml.bak")
@@ -88,8 +90,10 @@ def test_parser():
     copyfile("./tests/test.yaml.bak", "./tests/test.yaml")
     os.remove("./tests/test.yaml.bak")
 
+
 def filecheckfunc():
     raise FileNotFoundError
+
 
 def test_enc():
     os.environ["KVVERSION"] = "v2"
@@ -111,6 +115,7 @@ def test_enc():
         'Input a value for mariadb.db.password: ',
     ]
 
+
 def test_enc_with_env():
     os.environ["KVVERSION"] = "v2"
     input_values = ["adfs1", "adfs2", "adfs3", "adfs4"]
@@ -131,10 +136,12 @@ def test_enc_with_env():
         'Input a value for mariadb.db.password: ',
     ]
 
+
 def test_refuse_enc_from_file_with_bad_name():
     with pytest.raises(Exception) as e:
         vault.main(['enc', './tests/test.yaml', '-s', './tests/test.yaml.bad'])
         assert "ERROR: Secret file name must end with" in str(e.value)
+
 
 def test_enc_from_file():
     os.environ["KVVERSION"] = "v2"
@@ -165,6 +172,7 @@ def test_dec():
 
     assert 'Done Decrypting' in output
 
+
 def test_value_from_path():
     data = {
         "chapter1": {
@@ -192,6 +200,7 @@ def test_value_from_path():
         val = vault.value_from_path(data, "/chapter1/chapter1.1/bleh")
         assert "Missing secret value" in str(e.value)
 
+
 def test_clean():
     os.environ["KVVERSION"] = "v2"
     copyfile("./tests/test.yaml.dec", "./tests/test.yaml.dec.bak")
@@ -199,6 +208,7 @@ def test_clean():
         vault.main(['clean', '-f .tests/test.yaml', '-v'])
     copyfile("./tests/test.yaml.dec.bak", "./tests/test.yaml.dec")
     os.remove("./tests/test.yaml.dec.bak")
+
 
 @pytest.mark.skipif(subprocess.run("helm", shell=True), reason="No way of testing without Helm")
 def test_install():

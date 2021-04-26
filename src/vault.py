@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
+"""Vault plugin for Helm.
+
+Originlly created by Just-Insane.
+
+Used to process helm yaml files and automatically recover vault secrets to replace templated place holders at helm runtime
+
+See README.md for more info
+"""
 
 import argparse
-import os
-import re
-
-import hvac
-import ruamel.yaml
-
-RawTextHelpFormatter = argparse.RawTextHelpFormatter
 import glob
+import os
 import platform
+import re
 import subprocess
 import sys
 
 import git
+import hvac
+import ruamel.yaml
+
+RawTextHelpFormatter = argparse.RawTextHelpFormatter
 
 check_call = subprocess.check_call
 
@@ -23,6 +30,14 @@ if sys.version_info[:2] < (3, 7):
 
 
 def parse_args(args):
+    """Parse command line arguments.
+
+    Inputs
+        args - (dict) CLI args passed into application
+
+    Returns
+        parsed args as a dict
+    """
     # Help text
     parser = argparse.ArgumentParser(
         description="""Store secrets from Helm in Vault
@@ -140,22 +155,39 @@ def parse_args(args):
     return parser
 
 
+# TODO: what's this for? Do we care?
 class Git(object):
+    """Git object."""
+
     def __init__(self, cwd):
+        """Object initialization.
+
+        Inputs
+            cwd - (str) current working directory
+        """
         self.cwd = cwd
 
     def get_git_root(self):
+        """Get the thing from git."""
         try:
             self.git_repo = git.Repo(self.cwd, search_parent_directories=True)
             self.git_root = self.git_repo.git.rev_parse("--show-toplevel")
             return self.git_root
-        except Exception as ex:
-            print(f"There was an error finding the root git repository, please specify a path within the yaml file. For more information, see Vault Path Templating: https://github.com/Just-Insane/helm-vault#vault-path-templating")
+        # TODO if we are keeping this, then this bare exception has to get fixed
+        except Exception:
+            print("There was an error finding the root git repository, please specify a path within the yaml file. For more information, see Vault Path Templating: https://github.com/Just-Insane/helm-vault#vault-path-templating")
             pass
 
 
 class Envs(object):
+    """Vault control object."""
+
     def __init__(self, args):
+        """Object initialization.
+
+        Inputs
+            args - ??? CLI arguements maybe?
+        """
         self.args = args
         self.vault_addr = os.environ["VAULT_ADDR"]
         self.vault_mount_point = self.get_env("VAULT_MOUNT_POINT", "mountpoint", "secret")
@@ -172,7 +204,9 @@ class Envs(object):
 
         self.editor = self.get_env("EDITOR", "edit", editor_default)
 
+    # TODO: simplify?
     def get_env(self, environment_var_name, arg_name, default_value):
+        """Fetch env var unless provided by CLI args."""
         value = None
 
         if environment_var_name in os.environ:
@@ -196,7 +230,15 @@ class Envs(object):
 
 
 class Vault(object):
+    """Vault control object."""
+
     def __init__(self, args, envs):
+        """Object initialization.
+
+        Inputs
+            args - ??? CLI arguements maybe?
+            envs - (obj) Object of the envs type, contains all the environmnet variables (or defaults) use to manipulate this object
+        """
         self.args = args
         self.envs = envs
         self.folder = Git(os.getcwd())
@@ -212,9 +254,23 @@ class Vault(object):
         except Exception as ex:
             print(f"ERROR: {ex}")
 
-    def process_mount_point_and_path(self, full_path, path, key):
+    def process_mount_point_path_and_key(self, full_path, path, helm_key):
+        """Spring the vault path into the mount_point, object path and key name.
+
+        Inputs
+            full_path - (str) the path as found in the yaml, without the VAULT trigger
+            path - (str) feels redundant with the above, but I think it's the yaml path # TODO: what is this for really?
+            helm_key - (str) the final key in the helm yaml file
+
+        Returns
+            the mount_point, object path, and key to be used to recover the secret from vault
+        """
+        key = 'value'
         if full_path is not None:
-            _path = full_path
+            _path = full_path.split(':')[1]
+
+            key = full_path.split(':')[2]
+
             if _path.startswith('/'):
                 mount_point = _path.split('/')[1]
                 _path = '/'.join(_path.split('/')[2:])
@@ -222,13 +278,21 @@ class Vault(object):
                 mount_point = self.envs.vault_path.split('/')[0]
         else:
             mount_point = self.envs.vault_mount_point
-            _path = f"{self.envs.vault_path}/{self.folder}{path}/{key}"
+            _path = f"{self.envs.vault_path}/{self.folder}{path}/{helm_key}"
 
-        return mount_point, _path
+        return mount_point, _path, key
 
-    def vault_write(self, value, path, key, full_path=None):
+    def vault_write(self, value, path, helm_key, full_path=None):
+        """Write a secret to vault.
+
+        Inputs
+            value - (str) the value to write into vault
+            path - (str) feels redundant with the full_path, but I think it's the yaml path # TODO: what is this for really?
+            helm_key - (str) the final key in the helm yaml file
+            full_path - (str) the path as found in the yaml, without the VAULT trigger, defaults to None
+        """
         # Use path from template if presents
-        mount_point, _path = self.process_mount_point_and_path(full_path, path, key)
+        mount_point, _path, key = self.process_mount_point_path_and_key(full_path, path, helm_key)
 
         # Write to vault, using the correct Vault KV version
         try:
@@ -241,7 +305,7 @@ class Vault(object):
             elif self.kvversion == "v2":
                 self.client.secrets.kv.v2.create_or_update_secret(
                     path=_path,
-                    secret=dict(value=value),
+                    secret={key: value},
                     mount_point=mount_point,
                 )
             else:
@@ -254,8 +318,20 @@ class Vault(object):
         if self.args.verbose is True:
             print(f"Wrote {value} to: {_path}")
 
-    def vault_read(self, value, path, key, full_path=None):
-        mount_point, _path = self.process_mount_point_and_path(full_path, path, key)
+    def vault_read(self, value, path, helm_key, full_path=None):
+        """Recover secret(s) from vault.
+
+        Inputs:
+            value     - (str) the current vault from helm i.e. 'VAULT:/secret/hello'
+            path      - (str) the path to the secret object in vault as defined in the helm value i.e. /secrets/stringData
+            helm_key  - (str) the originating key name from the helm yaml, used to set the path with changeme is used to indicate lookup # TODO: remove this ability to keep use cases consistent?
+            # TODO: seems redundant with path, more investigation required
+            full_path - (str) the path to the secret object in vault including mount point i.e. /secrets/stringData/secret/hello
+
+        Returns
+            the value recovered from or all keys and values no vault key is specificed in the path
+        """
+        mount_point, _path, key = self.process_mount_point_path_and_key(full_path, path, helm_key)
 
         # Read from Vault, using the correct Vault KV version
         try:
@@ -268,7 +344,7 @@ class Vault(object):
                 value = value.get("data", {}).get("value")
             elif self.kvversion == "v2":
                 value = self.client.secrets.kv.v2.read_secret_version(path=_path, mount_point=mount_point)
-                value = value.get("data", {}).get("data", {}).get("value")
+                value = value.get("data", {}).get("data", {}).get(key)
             else:
                 print("Wrong KV Version specified, either v1 or v2")
         except AttributeError as ex:
@@ -280,6 +356,14 @@ class Vault(object):
 
 
 def load_yaml(yaml_file):
+    """Load the contents of a yaml file.
+
+    Inputs
+        yaml_file - (str) the name of the file to open including path
+
+    Returns
+        The contents of the yaml file as a dict
+    """
     # Load the YAML file
     yaml = ruamel.yaml.YAML()
     yaml.preserve_quotes = True
@@ -289,7 +373,12 @@ def load_yaml(yaml_file):
 
 
 def cleanup(args, envs):
-    # Cleanup decrypted files
+    """Cleanup decrypted files.
+
+    Inputs
+        args - ??? CLI arguements maybe?
+        envs - (obj) Object of the envs type, contains all the environmnet variables (or defaults) use to manipulate this object
+    """
     yaml_file = args.yaml_file
     decode_file = '.'.join(filter(None, [yaml_file, envs.environment, 'dec']))
     try:
@@ -309,11 +398,17 @@ def cleanup(args, envs):
         sys.exit()
 
 
-# Get value from a nested hash structure given a path of key names
-# For example:
-# secret_data['mysql']['password'] = "secret"
-# value_from_path(secret_data, "/mysql/password") => returns "secret"
 def value_from_path(secret_data, path):
+    """Get value from a nested hash structure given a path of key names.
+
+    For example:
+        secret_data['mysql']['password'] = "secret"
+        value_from_path(secret_data, "/mysql/password") => returns "secret"
+
+    Inputs
+        secret_data - (dict) ???
+        path - (str) ???
+    """
     val = secret_data
     for key in path.split('/'):
         if not key:
@@ -326,13 +421,23 @@ def value_from_path(secret_data, path):
 
 
 def dict_walker(pattern, data, args, envs, secret_data, path=None):
-    # Walk through the loaded dicts looking for the values we want
+    """Walk through the loaded dicts looking for the values we want.
+
+    Inputs
+        pattern     - ()
+        data        - ()
+        args        - ??? CLI arguements maybe?
+        envs        - (obj) Object of the envs type, contains all the environmnet variables (or defaults) use to manipulate this object
+        secret_data - ()
+        path        - () None
+    """
     environment = f"/{envs.environment}" if envs.environment else ""
 
     path = path if path is not None else environment
     action = args.action
+    vault = Vault(args, envs)
     if isinstance(data, dict):
-        for key, value in data.items():
+        for helm_key, value in data.items():
             if value == pattern or str(value).startswith(envs.secret_template):
                 if value.startswith(envs.secret_template):
                     _full_path = value[len(envs.secret_template):].replace("{environment}", environment)
@@ -341,18 +446,17 @@ def dict_walker(pattern, data, args, envs, secret_data, path=None):
                 if action == "enc":
                     path_sans_env = path.replace(environment, '')
                     if secret_data:
-                        data[key] = value_from_path(secret_data, f"{path_sans_env}/{key}")
+                        data[helm_key] = value_from_path(secret_data, f"{path_sans_env}/{helm_key}")
                     else:
                         path_to_property_syntax = path_sans_env.replace("/", ".")[1:]
-                        data[key] = input(f"Input a value for {path_to_property_syntax}.{key}: ")
-                    vault = Vault(args, envs)
-                    vault.vault_write(data[key], path, key, _full_path)
+                        data[helm_key] = input(f"Input a value for {path_to_property_syntax}.{helm_key}: ")
+                    vault.vault_write(data[helm_key], path, helm_key, _full_path)
                 elif (action == "dec") or (action == "view") or (action == "edit") or (action == "install") or (action == "template") or (action == "upgrade") or (action == "lint") or (action == "diff"):
-                    vault = Vault(args, envs)
-                    vault = vault.vault_read(value, path, key, _full_path)
-                    value = vault
-                    data[key] = value
-            for res in dict_walker(pattern, value, args, envs, secret_data, path=f"{path}/{key}"):
+                    # value=VAULT:/secret/hello, path=/secrets/stringData, helm_key=mysecret, _full_path=/secret/hello
+                    print(f"value={value}, path={path}, helm_key={helm_key}, _full_path={_full_path}")
+                    value = vault.vault_read(value, path, helm_key, _full_path)
+                    data[helm_key] = value
+            for res in dict_walker(pattern, value, args, envs, secret_data, path=f"{path}/{helm_key}"):
                 yield res
     elif isinstance(data, list):
         for item in data:
@@ -361,6 +465,14 @@ def dict_walker(pattern, data, args, envs, secret_data, path=None):
 
 
 def load_secret(args):
+    """Load a secrets file.
+
+    Inputs
+        args - ??? CLI arguements maybe?
+
+    Returns
+        contents of the secrets file as a dict
+    """
     if args.secret_file:
         if not re.search(r'\.yaml\.dec$', args.secret_file):
             raise Exception(f"ERROR: Secret file name must end with \".yaml.dec\". {args.secret_file} was given instead.")
@@ -368,8 +480,10 @@ def load_secret(args):
 
 
 def main(argv=None):
-    # Parse arguments from argparse
-    # This is outside of the parse_arg function because of issues returning multiple named values from a function
+    """Parse arguments from argparse.
+
+    This is outside of the parse_arg function because of issues returning multiple named values from a function
+    """
     parsed = parse_args(argv)
     args, leftovers = parsed.parse_known_args(argv)
 
@@ -389,7 +503,7 @@ def main(argv=None):
 
     for path, key, value in dict_walker(envs.secret_delim, data, args, envs, secret_data):
         print("Done")
-    
+
     decode_file = '.'.join(filter(None, [yaml_file, envs.environment, 'dec']))
 
     if action == "dec":
