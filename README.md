@@ -63,7 +63,7 @@ Helm-Vault supports the following features:
 
 Helm-Vault was created to provide a better way to manage secrets for Helm, with the ability to take existing public Helm Charts, and with minimal modification, provide a way to have production data that is not stored in a public location.
 
-```
+```bash
 $ helm vault enc values.yaml
 Input a value for /mariadb/db/password:
 Input a value for /externalDatabase/user:
@@ -111,7 +111,7 @@ To get started with Helm-Vault, follow these steps:
 
 This project is [hosted on GitHub](https://github.com/xMatters/helm-vault). You can clone this project directly using this command:
 
-```
+```bash
 git clone git@github.com:Justin-Tech/helm-vault.git
 ```
 
@@ -119,33 +119,25 @@ git clone git@github.com:Justin-Tech/helm-vault.git
 
 Helm-Vault has built-in unit tests using pytest, you can run them with the command below:
 
+```bash
+pip3 install -r ./requirements.txt
+python3 -m unittest discover 
 ```
-pip3 install -r ./tests/requirements.txt
-python3 -m pytest
-```
-
-### Other Tests
-
-Unittesting and integration testing is automatically run via Github Actions on commit and PRs.
-
-Additionally, code quality checking is handled by LGTM.com
-
-Both of these checks must pass before PRs will be merged.
 
 ## Installation
 
 ### Using Helm plugin manager (> 2.3.x)
 
-```
+```bash
 pip3 install git+https://github.com/xMatters/helm-vault
 helm plugin install https://github.com/xMatters/helm-vault
 ```
 
 ## Usage and Examples
 
-```
+```bash
 $ helm vault --help
-usage: vault.py [-h] {enc,dec,clean,view,edit} ...
+usage: vault.py [-h] {dec,clean,view,edit} ...
 
 Store secrets from Helm in Vault
 
@@ -157,8 +149,7 @@ VAULT_ADDR:     (The HTTP address of Vault, for example, http://localhost:8200)
 VAULT_TOKEN:    (The token used to authenticate with Vault)
 
 positional arguments:
-  {enc,dec,clean,view,edit}
-    enc                 Parse a YAML file and store user entered data in Vault
+  {dec,clean,view,edit}
     dec                 Parse a YAML file and retrieve values from Vault
     clean               Remove decrypted files (in the current directory)
     view                View decrypted YAML file
@@ -180,12 +171,10 @@ Decrypted files have the suffix ".yaml.dec" by default
 |--------------------|---------------------------|--------|--------|
 |`VAULT_ADDR`|`null`|The HTTP(S) address fo Vault|Yes|
 |`VAULT_TOKEN`|`null`|The token used to authenticate with Vault|Yes|
-|`VAULT_PATH`|`secret/helm`|The default path used within Vault||
-|`VAULT_MOUNT_POINT`|`secret`|The default mountpoint used within Vault||
-|`SECRET_DELIM`|`changeme`|The value which will be searched for within YAML to prompt for encryption/decryption||
+|`VAULT_MOUNT_POINT`|`secrets`|The default mountpoint used within Vault||
 |`SECRET_TEMPLATE`|`VAULT:`|Used for [Vault Path Templating](#vault-path-templating)||
 |`EDITOR`| - Windows: `notepad` <br> - macOS/Linux: `vi`|The editor used when calling `helm vault edit`||
-|`KVVERSION`|`v1`|The K/V secret engine version within Vault||
+|`KVVERSION`|`v2`|The K/V secret engine version within Vault||
 
 More detailed information available below:
 
@@ -206,27 +195,11 @@ Default when not set: `null`, the program will error and inform you that this va
 </details>
 
 <details>
-<summary>VAULT_PATH</summary>
-
-This is the path within Vault that secrets are stored. It should start with the name of the secrets engine being used and an optional folder within that secrets engine that all Helm-Vault secrets will be stored.
-
-Default when not set: `secret/helm`, where `secret` is the secrets engine being used, and `helm` is the folder in which all secrets will be stored.
-</details>
-
-<details>
 <summary>VAULT_MOUNT_POINT</summary>
 
 This is the mountpoint within Vault that secrets are stored. Vault stores secrets in the following url format `/{mount_point}/data/{path}`. Mountpoint in this case could also include any namespaces, e.g. `namespace1/subnamespace/mountpoint` = `/namespace1/subnamespace/mountpoint/data/{path}`.
 
-Default when not set: `secret`, where `secret` is the mountpoint being used.
-</details>
-
-<details>
-<summary>SECRET_DELIM</summary>
-
-This is the value which Helm-Vault will search for within the YAML files to prompt for encryption, or replace when decrypting.
-
-Default when not set: `changeme`.
+Default when not set: `secrets`, where `secrets` is the mountpoint being used.
 </details>
 
 <details>
@@ -234,7 +207,7 @@ Default when not set: `changeme`.
 
 This is the value that Helm-Vault will search for within the YAML files to denote [Vault Path Templating](#vault-path-templating).
 
-Default when not set: `VAULT:`
+Default when not set: `VAULT`
 </details>
 
 <details>
@@ -254,15 +227,13 @@ Default when not set:
 
 This is the K/V secret engine version within Vault, currently `v1` and `v2` are supported.
 
-Default when not set: `v1`
+Default when not set: `v2`
 
-**Note:** Expect this to change in a later version, as Vault now defaults to `v2` K/V secrets engines.
 </details>
 
 ### Basic commands:
 
-```
-  enc           Encrypt file
+```bash
   dec           Decrypt file
   view          Print decrypted file
   edit          Edit file (decrypt before, manual cleanup)
@@ -275,74 +246,32 @@ Each of these commands have their own help, referenced by `helm vault {enc,dec,c
 
 |Flag|Usage|Default|Availability|
 |----|-----|-------|------------|
-|`-d`, `--deliminator`|The secret deliminator used when parsing|`changeme`|`enc`, `dec`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
-|`-vp`, `--vaultpath`|The Vault Path (secret mount location in Vault)|`secret/helm`|`enc`, `dec`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
-|`-mp`, `--mountpoint`|The Vault Mount Point|`secret`|`enc`, `dec`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
-|`-vt`, `--vaulttemplate`|Substring with path to vault key instead of deliminator.|`VAULT:`|`enc`, `dec`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
-|`-kv`, `--kvversion`|The version of the KV secrets engine in Vault|`v1`|`enc`, `dec`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
-|`-v`, `--verbose`|Verbose output||`enc`, `dec`, `clean`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
-|`-s`, `--secret-file`|File containing secrets for input, rather than using stdin, must end in `.yaml.dec`||`enc`|
+|`-mp`, `--mountpoint`|The Vault Mount Point|`secrets`|`dec`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
+|`-vt`, `--vaulttemplate`|Substring with path to vault key instead of deliminator.|`VAULT`|`dec`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
+|`-kv`, `--kvversion`|The version of the KV secrets engine in Vault|`v2`|`dec`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
+|`-v`, `--verbose`|Verbose output||`dec`, `clean`, `view`, `edit`, `install`, `template`, `upgrade`, `lint`, `diff`|
 |`-f`, `--file`|The specific YAML file to be deleted, without `.dec`||`clean`|
 |`-ed`, `--editor`|Editor name|Windows: `notepad`, macOS/Linux: `vi`|`edit`|
 |`-f`, `--values`|The encrypted YAML file to decrypt on the fly||`install`, `template`, `upgrade`, `lint`, `diff`|
-|`-e`, `--environment`|Environment that secrets should be stored under||`enc`, `dec`, `clean`, `install`|
+|`-e`, `--environment`|Environment that secrets should be stored under||`dec`, `clean`, `install`|
 
 
 ### Usage examples
-
-#### Encrypt
-
-The encrypt operation encrypts a values.yaml file and saves the encrypted values in Vault:
-
-```
-$ helm vault enc values.yaml
-Input a value for nextcloud.password: asdf1
-Input a value for externalDatabase.user: asdf2
-Input a value for .mariadb.db.password: asdf3
-```
-
-If you don't want to enter the secrets manually on stdin, you can pass a file containing the secrets. Copy `values.yaml` to `values.yaml.dec` and edit the file, replacing "changeme" (the deliminator) with the secret value. Then you can save the secret to vault by running: 
-
-```
-$ helm vault enc values.yaml -s values.yaml.dec
-```
-
-By default the name of the secret file has to end in `.yaml.dec` so you can add this extension to gitignore to prevent committing a secret to your git repo.
-
-In addition, you can namespace your secrets to a desired environment by using the `-e` flag.
-
-```
-helm vault enc values.yaml -e prod
-Input a value for nextcloud.password: asdf1
-Input a value for externalDatabase.user: asdf2
-Input a value for mariadb.db.password: asdf3
-```
 
 #### Decrypt
 
 The decrypt operation decrypts a values.yaml file and saves the decrypted result in values.yaml.dec:
 
-```
+```bash
 $ helm vault dec values.yaml
 ```
 
 The values.yaml.dec file:
-```
-...
-nextcloud:
-  host: nextcloud.example.com
-  username: admin
-  password: asdf1
-...
-mariadb:
-parameters
-  enabled: true
 
-  db:
-    name: nextcloud
-    user: nextcloud
-    password: asdf2
-...
+```bash
+secrets:
+  myKey: value
+  foo: bar
 ```
 
 If leveraging environment specific secrets, you can decrypt the desired environment by specifying with the `-e` flag.
@@ -351,7 +280,7 @@ Doing so will result in a decrypted file that is stored as `my_file.yaml.{enviro
 
 For example
 
-```
+```bash
 $ helm vault dec values.yaml -e prod
 ```
 
@@ -360,7 +289,8 @@ Will result in your production environment secrets being dumped into a file name
 #### View
 
 The view operation decrypts values.yaml and prints it to stdout:
-```
+
+```bash
 $ helm vault view values.yaml
 ```
 
@@ -368,7 +298,7 @@ $ helm vault view values.yaml
 
 The edit operation will decrypt the values.yaml file and open it in an editor.
 
-```
+```bash
 $ helm vault edit values.yaml
 ```
 
@@ -380,7 +310,7 @@ Note: This will save a `.dec` file that is not automatically cleaned up.
 
 The operation will delete all decrypted files in a directory:
 
-```
+```bash
 $ helm vault clean
 ```
 
@@ -388,18 +318,14 @@ $ helm vault clean
 
 It is possible to setup vault's path inside helm chart like this
 
+```bash
+key1: VAULT:helm1/test/object:key1
+key2: VAULT:/private-kv/helm1/test/object:key2
+allKeys: VAULT:helm1/test/bigObject
 ```
-key1: VAULT:helm1/test/key1
-key2: VAULT:/helm2/test/key2
-```
-This mean that key1 will be storing into base_path/helm1/test/key1 and key2 into /helm2/test/key2 . Where is helm2 is root path enabled via secrets enable. For example:
-
-```
-vault secrets enable  -path=helm2 kv-v2
-```
+This mean that key1 will be storing into {mount_point}/helm1/test/object in the key field `key1` and `key2` into /private-kv/helm1/test/object. and allKeys will end up containing a dictionary of all keys found in {mount_point}/helm1/test/bigObject
 
 To override default value of template path pattern use **SECRET_TEMPLATE** variable. By default this value is VAULT: . This is mean that all keys with values like VAULT:something will be stored inside vault.
-
 
 ### Wrapper Examples
 
@@ -508,7 +434,7 @@ We encourage public contributions! Please review [CONTRIBUTING.md](docs/CONTRIBU
 
 # License
 
-Copyright (c) 2019 Justin Gauthier
+Copyright (c) 2019 xMatters
 
 This project is licensed under GPLv3 - see [LICENSE.md](LICENSE.md) file for details.
 
@@ -516,14 +442,12 @@ This project is licensed under GPLv3 - see [LICENSE.md](LICENSE.md) file for det
 
 # Authors
 
-* **[Justin Gauthier](https://github.com/xMatters)**
+* **[xMatters](https://github.com/xMatters)**
 
 **[Back to top](#table-of-contents)**
 
 # Acknowledgments
 
-The idea for this project comes from [Helm-Secrets](https://github.com/futuresimple/helm-secrets)
-
-Special thanks to the [Python Discord](https://discord.gg/python) server.
+The base code for this project comes from https://github.com/Just-Insane/helm-vault/ which was inspired by [Helm-Secrets](https://github.com/futuresimple/helm-secrets)
 
 **[Back to top](#table-of-contents)**
