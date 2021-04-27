@@ -1,5 +1,0 @@
-secrets:
-  stringData: 
-    unencoded-value: VAULT:/secret/hello:value
-    unencoded-custom.key: VAULT:/secret/hello:custom.key
-  data: VAULT:/secret/hello

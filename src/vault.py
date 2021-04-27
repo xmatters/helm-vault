@@ -10,7 +10,7 @@ See README.md for more info
 
 import argparse
 import glob
-import json
+import logging
 import os
 import platform
 import re
@@ -18,7 +18,9 @@ import subprocess
 import sys
 
 import hvac
-import ruamel.yaml
+import yaml
+
+logger = logging.getLogger(__name__)
 
 RawTextHelpFormatter = argparse.RawTextHelpFormatter
 
@@ -266,10 +268,8 @@ def load_yaml(yaml_file):
         The contents of the yaml file as a dict
     """
     # Load the YAML file
-    yaml = ruamel.yaml.YAML()
-    yaml.preserve_quotes = True
-    with open(yaml_file) as filepath:
-        data = yaml.load(filepath)
+    with open(yaml_file) as fh:
+        data = yaml.full_load(fh)
         return data
 
 
@@ -299,10 +299,11 @@ def cleanup(args, envs):
         sys.exit()
 
 
-def dict_walker(data, args, envs, helm_path=None):
+def dict_walker(vault, data, args, envs, helm_path=None):
     """Walk through the loaded dicts looking for the values we want.
 
     Inputs
+        vault     - (obj) the vault object
         data      - (dict) the data to walk through looking for subsitutions
         args      - (dict) CLI arguements provided
         envs      - (obj) Object of the envs type, contains all the environmnet variables (or defaults) use to manipulate this object
@@ -310,7 +311,6 @@ def dict_walker(data, args, envs, helm_path=None):
     """
     environment = f"/{envs.environment}" if envs.environment else ""
 
-    vault = Vault(args, envs)
     if isinstance(data, dict):
         for helm_key, value in data.items():
             if str(value).startswith(envs.secret_template):
@@ -320,27 +320,12 @@ def dict_walker(data, args, envs, helm_path=None):
                 if key:
                     value = vault.vault_read(mount_point, vault_path).get(key)
                 data[helm_key] = value
-            for res in dict_walker(value, args, envs, helm_path=f"{helm_path}/{helm_key}"):
+            for res in dict_walker(vault, value, args, envs, helm_path=f"{helm_path}/{helm_key}"):
                 yield res
     elif isinstance(data, list):
         for item in data:
-            for res in dict_walker(item, args, envs, helm_path=f"{helm_path}"):
+            for res in dict_walker(vault, item, args, envs, helm_path=f"{helm_path}"):
                 yield res
-
-
-def load_secret(args):
-    """Load a secrets file.
-
-    Inputs
-        args - (dict) CLI arguements
-
-    Returns
-        contents of the secrets file as a dict
-    """
-    if args.secret_file:
-        if not re.search(r'\.yaml\.dec$', args.secret_file):
-            raise Exception(f"ERROR: Secret file name must end with \".yaml.dec\". {args.secret_file} was given instead.")
-        return load_yaml(args.secret_file)
 
 
 def main(argv=None):
@@ -351,44 +336,43 @@ def main(argv=None):
     parsed = parse_args(argv)
     args, leftovers = parsed.parse_known_args(argv)
 
-    yaml_file = args.yaml_file
-    yaml_file_data = load_yaml(yaml_file)
-
-    action = args.action
+    yaml_file_data = load_yaml(args.yaml_file)
 
     envs = Envs(args)
+    vault = Vault(args, envs)
 
-    if action == "clean":
+    if args.action == "clean":
         cleanup(args, envs)
 
-    yaml = ruamel.yaml.YAML()
-    yaml.preserve_quotes = True
+    try:
+        for res in dict_walker(vault, yaml_file_data, args, envs):
+            logger.debug(f"Done {res}")
+    finally:
+        vault.client.session.close()
 
-    for res in dict_walker(yaml_file_data, args, envs):
-        print(f"Done {res}")
+    decode_file = '.'.join(filter(None, [args.yaml_file, envs.environment, 'dec']))
 
-    decode_file = '.'.join(filter(None, [yaml_file, envs.environment, 'dec']))
-
-    if action == "dec":
-        yaml.dump(yaml_file_data, open(decode_file, "w"))
-        print("Done Decrypting")
-    elif action == "view":
+    if args.action == "dec":
+        with open(decode_file, "w") as fh:
+            yaml.dump(yaml_file_data, fh)
+        logger.info("Done Decrypting")
+    elif args.action == "view":
         yaml.dump(yaml_file_data, sys.stdout)
-    elif action == "edit":
+    elif args.action == "edit":
         yaml.dump(yaml_file_data, open(decode_file, "w"))
         os.system(envs.editor + ' ' + f"{decode_file}")
     # These Helm commands are only different due to passed variables
-    elif (action == "install") or (action == "template") or (action == "upgrade") or (action == "lint") or (action == "diff"):
+    elif args.action in ["install", "template", "upgrade", "lint", "diff"]:
         yaml.dump(yaml_file_data, open(decode_file, "w"))
         leftovers = ' '.join(leftovers)
-
         try:
             cmd = f"helm {args.action} {leftovers} -f {decode_file}"
             if args.verbose is True:
                 print(f"About to execute command: {cmd}")
             subprocess.run(cmd, shell=True)
         except Exception as ex:
-            print(f"Error: {ex}")
+            logger.exception(f"Error: {ex}")
+            raise Exception('ex')
 
         cleanup(args, envs)
 

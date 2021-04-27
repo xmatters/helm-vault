@@ -1,4 +1,0 @@
-pytest
-datadiff
-mock
-pytest_mock

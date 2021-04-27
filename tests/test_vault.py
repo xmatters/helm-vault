@@ -2,228 +2,101 @@
 
 import os
 import subprocess
-from collections import OrderedDict as ordereddict
+from base64 import b64encode
 from shutil import copyfile
+from unittest import TestCase
 
-import pytest
+import hvac
 import src.vault as vault
-from datadiff.tools import assert_equal
+import yaml
 
 
-def test_load_yaml():
+class helmVaultTests(TestCase):
+    """Unit tests."""
 
-    data_test = ordereddict([
-        ('image', ordereddict([
-            ('repository', 'nextcloud'),
-            ('tag', '15.0.2-apache'),
-            ('pullPolicy', 'IfNotPresent')
-        ])),
-        ('nameOverride', ''),
-        ('fullnameOverride', ''),
-        ('replicaCount', 1),
-        ('ingress', ordereddict([
-            ('enabled', True),
-            ('annotations', ordereddict())
-        ])),
-        ('nextcloud', ordereddict([
-            ('host', 'nextcloud.corp.justin-tech.com'),
-            ('username', 'admin'),
-            ('password', 'changeme')
-        ])),
-        ('internalDatabase', ordereddict([
-            ('enabled', True),
-            ('name', 'nextcloud')
-        ])),
-        ('externalDatabase', ordereddict([
-            ('enabled', False),
-            ('host', None),
-            ('user', 'VAULT:/secret/testdata/user'),
-            ('password', 'VAULT:/secret/{environment}/testdata/password'),
-            ('database', 'nextcloud')
-        ])),
-        ('mariadb', ordereddict([
-            ('enabled', True),
-            ('db', ordereddict([
-                ('name', 'nextcloud'),
-                ('user', 'nextcloud'),
-                ('password', 'changeme')
-            ])),
-            ('persistence', ordereddict([
-                ('enabled', True),
-                ('storageClass', 'nfs-client'),
-                ('accessMode', 'ReadWriteOnce'),
-                ('size', '8Gi')
-            ]))
-        ])),
-        ('service', ordereddict([
-            ('type', 'ClusterIP'),
-            ('port', 8080),
-            ('loadBalancerIP', 'nil')
-        ])),
-        ('persistence', ordereddict([
-            ('enabled', True),
-            ('storageClass', 'nfs-client'),
-            ('accessMode', 'ReadWriteOnce'),
-            ('size', '8Gi')
-        ])),
-        ('resources', ordereddict()),
-        ('nodeSelector', ordereddict()),
-        ('tolerations', []),
-        ('affinity', ordereddict())
-    ])
-    yaml_file = "./tests/test.yaml"
-    data = vault.load_yaml(yaml_file)
-    assert_equal(data, data_test)
-
-
-def test_git_path():
-    cwd = os.getcwd()
-    git_path = vault.Git(cwd)
-    git_path = git_path.get_git_root()
-    assert git_path == os.getcwd()
-
-
-def test_parser():
-    copyfile("./tests/test.yaml", "./tests/test.yaml.bak")
-    parser = vault.parse_args(['clean', '-f ./tests/test.yaml'])
-    assert(parser)
-    copyfile("./tests/test.yaml.bak", "./tests/test.yaml")
-    os.remove("./tests/test.yaml.bak")
-
-
-def filecheckfunc():
-    raise FileNotFoundError
-
-
-def test_enc():
-    os.environ["KVVERSION"] = "v2"
-    input_values = ["adfs1", "adfs2", "adfs3", "adfs4"]
-    output = []
-
-    def mock_input(s):
-        output.append(s)
-        return input_values.pop(0)
-    vault.input = mock_input
-    vault.print = lambda s : output.append(s)
-
-    vault.main(['enc', './tests/test.yaml'])
-
-    assert output == [
-        'Input a value for nextcloud.password: ',
-        'Input a value for externalDatabase.user: ',
-        'Input a value for externalDatabase.password: ',
-        'Input a value for mariadb.db.password: ',
-    ]
-
-
-def test_enc_with_env():
-    os.environ["KVVERSION"] = "v2"
-    input_values = ["adfs1", "adfs2", "adfs3", "adfs4"]
-    output = []
-
-    def mock_input(s):
-        output.append(s)
-        return input_values.pop(0)
-    vault.input = mock_input
-    vault.print = lambda s : output.append(s)
-
-    vault.main(['enc', './tests/test.yaml', '-e', 'test'])
-
-    assert output == [
-        'Input a value for nextcloud.password: ',
-        'Input a value for externalDatabase.user: ',
-        'Input a value for externalDatabase.password: ',
-        'Input a value for mariadb.db.password: ',
-    ]
-
-
-def test_refuse_enc_from_file_with_bad_name():
-    with pytest.raises(Exception) as e:
-        vault.main(['enc', './tests/test.yaml', '-s', './tests/test.yaml.bad'])
-        assert "ERROR: Secret file name must end with" in str(e.value)
-
-
-def test_enc_from_file():
-    os.environ["KVVERSION"] = "v2"
-    vault.main(['enc', './tests/test.yaml', '-s', './tests/test.yaml.dec'])
-    assert True # If it reaches here without error then encoding was a success
-    # TODO: Maybe test if the secret is correctly saved to vault
-
-
-def test_enc_from_file_with_environment():
-    os.environ["KVVERSION"] = "v2"
-    vault.main(['enc', './tests/test.yaml', '-s', './tests/test.yaml.dec', '-e', 'test'])
-    assert True # If it reaches here without error then encoding was a success
-    # TODO: Maybe test if the secret is correctly saved to vault
-
-
-def test_dec():
-    os.environ["KVVERSION"] = "v2"
-    input_values = ["adfs1", "adfs2"]
-    output = []
-
-    def mock_input(s):
-        output.append(s)
-        return input_values.pop(0)
-    vault.input = mock_input
-    vault.print = lambda s : output.append(s)
-
-    vault.main(['dec', './tests/test.yaml'])
-
-    assert 'Done Decrypting' in output
-
-
-def test_value_from_path():
-    data = {
-        "chapter1": {
-            "chapter1.1": {
-                "chapter1.1.1": "good",
-                "chapter1.1.2": "bad",
-            },
-            "chapter1.2": {
-                "chapter1.2.1": "good",
-                "chapter1.2.2": "bad",
+    def setUp(self):
+        """Initalize test environment."""
+        self.mount_path = "secret"
+        self.secret_path = "hello"
+        self.secret = {
+            "value": "testsecret",
+            "custom.key": "customSecret"
+        }
+        self.expected_data = {
+            "secrets": {
+                "stringData": {
+                    "unencoded-value": "VAULT:/secret/hello:value",
+                    "unencoded-custom.key": "VAULT:/secret/hello:custom.key"
+                },
+                "data": "VAULT:/secret/hello"
             }
         }
-    }
-    val = vault.value_from_path(data, "/")
-    assert val == data
-    val = vault.value_from_path(data, "/chapter1/chapter1.1")
-    assert val == {
-                "chapter1.1.1": "good",
-                "chapter1.1.2": "bad",
+        self.expected_decoded_data = {
+            "secrets": {
+                "stringData": {
+                    "unencoded-value": self.secret["value"],
+                    "unencoded-custom.key": self.secret["custom.key"]
+                },
+                "data": {
+                    "custom.key": self.secret["custom.key"],
+                    "value": self.secret["value"]
+                }
             }
-    val = vault.value_from_path(data, "/chapter1/chapter1.1/chapter1.1.2")
-    assert val == "bad"
+        }
+        self.expected_rendered_template = {
+            "kind": "Secret",
+            "apiVersion": "v1",
+            "stringData": {
+                "unencoded-custom.key": self.secret["custom.key"],
+                "unencoded-value": self.secret["value"]
+            },
+            "data": {
+                "custom.key": b64encode(self.secret["custom.key"].encode()).decode('utf-8'),
+                "value": b64encode(self.secret["value"].encode()).decode('utf-8')
+            }
+        }
+        self.test_yaml_file = "./tests/test.yaml"
+        self.client = hvac.Client(url=os.environ["VAULT_ADDR"], token=os.environ["VAULT_TOKEN"])
+        self.client.secrets.kv.v2.create_or_update_secret(
+            path=self.secret_path,
+            secret=self.secret,
+            mount_point=self.mount_path
+        )
+        secret_version_response = self.client.secrets.kv.v2.read_secret_version(
+            path=self.secret_path,
+            mount_point=self.mount_path
+        )
+        secrets = secret_version_response.get("data", {}).get("data", {})
+        assert secrets == self.secret
 
-    with pytest.raises(Exception) as e:
-        val = vault.value_from_path(data, "/chapter1/chapter1.1/bleh")
-        assert "Missing secret value" in str(e.value)
+    def tearDown(self):
+        """Tear down after tests complete."""
+        self.client.session.close()
 
+    def test_load_yaml(self):
+        """Test loading data from a yaml file"""
+        loaded_data = vault.load_yaml(self.test_yaml_file)
+        self.assertDictEqual(loaded_data, self.expected_data)
 
-def test_clean():
-    os.environ["KVVERSION"] = "v2"
-    copyfile("./tests/test.yaml.dec", "./tests/test.yaml.dec.bak")
-    with pytest.raises(FileNotFoundError):
-        vault.main(['clean', '-f .tests/test.yaml', '-v'])
-    copyfile("./tests/test.yaml.dec.bak", "./tests/test.yaml.dec")
-    os.remove("./tests/test.yaml.dec.bak")
+    def test_parser(self):
+        """Test command parser."""
+        copyfile("./tests/test.yaml", "./tests/test.yaml.bak")
+        parser = vault.parse_args(['clean', '-f ./tests/test.yaml'])
+        self.assertTrue(parser)
+        copyfile("./tests/test.yaml.bak", "./tests/test.yaml")
+        os.remove("./tests/test.yaml.bak")
 
+    def test_dec(self):
+        """Test decoding of yaml."""
+        os.environ["KVVERSION"] = "v2"
+        vault.main(['dec', './tests/test.yaml'])
+        self.assertTrue(self.client.is_authenticated())
+        decoded_data = vault.load_yaml(f"{self.test_yaml_file}.dec")
+        self.assertDictEqual(decoded_data, self.expected_decoded_data)
 
-@pytest.mark.skipif(subprocess.run("helm", shell=True), reason="No way of testing without Helm")
-def test_install():
-    os.environ["KVVERSION"] = "v2"
-    input_values = []
-    output = []
-
-    def mock_input(s):
-        output.append(s)
-        return input_values.pop(0)
-    vault.input = mock_input
-    vault.print = lambda  s : output.append(s)
-
-    vault.main(['install', 'stable/nextcloud --name nextcloud --namespace nextcloud -f ../tests/test.yaml --dry-run'])
-
-    assert output == [
-        'NAME:   nextcloud',
-    ]
+    def test_install(self):
+        """Test helm-vault."""
+        os.environ["KVVERSION"] = "v2"
+        result = subprocess.run(["helm", "vault", "template", "--namespace=test-namespace", "vault-test", "./tests/helm/test", "-f", "./tests/test.yaml"], stdout=subprocess.PIPE)
+        rendered_template = yaml.safe_load(result.stdout)
+        self.assertDictEqual(rendered_template, self.expected_rendered_template)
