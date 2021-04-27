@@ -16,6 +16,7 @@ class helmVaultTests(TestCase):
 
     def setUp(self):
         """Initalize test environment."""
+        os.environ["KVVERSION"] = "v2"
         self.mount_path = "secret"
         self.secret_path = "hello"
         self.secret = {
@@ -88,7 +89,6 @@ class helmVaultTests(TestCase):
 
     def test_dec(self):
         """Test decoding of yaml."""
-        os.environ["KVVERSION"] = "v2"
         vault.main(['dec', './tests/test.yaml'])
         self.assertTrue(self.client.is_authenticated())
         decoded_data = vault.load_yaml(f"{self.test_yaml_file}.dec")
@@ -96,7 +96,9 @@ class helmVaultTests(TestCase):
 
     def test_install(self):
         """Test helm-vault."""
-        os.environ["KVVERSION"] = "v2"
+        plugin_list = subprocess.run(["helm", "plugin", "list"], stdout=subprocess.PIPE)
+        if "vault" not in plugin_list.stdout.decode('utf-8'):
+            subprocess.run(["helm", "plugin", "install", "./"])
         result = subprocess.run(["helm", "vault", "template", "--namespace=test-namespace", "vault-test", "./tests/helm/test", "-f", "./tests/test.yaml"], stdout=subprocess.PIPE)
         rendered_template = yaml.safe_load(result.stdout)
         self.assertDictEqual(rendered_template, self.expected_rendered_template)

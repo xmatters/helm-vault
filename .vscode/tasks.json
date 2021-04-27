@@ -5,7 +5,7 @@
             "label": "Run Unit Tests",
             "type": "shell",
             "command": "python3",
-            "args": ["-m", "pytest"],
+            "args": ["-m", "unittest", "discover"],
             "problemMatcher": []
         }
     ]
