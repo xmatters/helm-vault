@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-
+"""Unit Tests for the Helm-vault plugin."""
 import os
 import subprocess
 from base64 import b64encode
@@ -15,7 +14,7 @@ class helmVaultTests(TestCase):
     """Unit tests."""
 
     def setUp(self):
-        """Initalize test environment."""
+        """Init for test environment."""
         os.environ["KVVERSION"] = "v2"
         self.mount_path = "secret"
         self.secret_path = "hello"
@@ -75,7 +74,7 @@ class helmVaultTests(TestCase):
         self.client.session.close()
 
     def test_load_yaml(self):
-        """Test loading data from a yaml file"""
+        """Test loading data from a yaml file."""
         loaded_data = vault.load_yaml(self.test_yaml_file)
         self.assertDictEqual(loaded_data, self.expected_data)
 
